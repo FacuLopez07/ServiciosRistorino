@@ -1,63 +1,116 @@
 package ar.edu.ubp.das.ristorinoapi.repositories;
 
 import ar.edu.ubp.das.ristorinoapi.beans.RestaurantResponse;
-import ar.edu.ubp.das.ristorinoapi.beans.PromotionContent;
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Map;
+
+import ar.edu.ubp.das.ristorinoapi.components.SimpleJdbcCallFactory;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 
 @Repository
 public class PromotionRepository {
 
+    private static final Logger logger = LoggerFactory.getLogger(PromotionRepository.class);
+
     @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private SimpleJdbcCallFactory simpleJdbcCallFactory;
 
     private final Gson gson = new Gson();
 
+    // Método actual conservado para compatibilidad
     public RestaurantResponse getPromotionsWithRestaurant() {
+        // Por ahora usamos el restaurante 1, sin filtro de vigencia ni sucursal
+        return getPromotionsWithRestaurant(1, null, null);
+    }
+
+    // Nuevo método parametrizado, usando SimpleJdbcCall
+    public RestaurantResponse getPromotionsWithRestaurant(Integer nroRestaurante, Boolean soloVigentes, Integer nroSucursal) {
         try {
-            String sql = "EXEC dbo.usp_get_promociones_restaurante @nro_restaurante = 1";
+            logger.info("Ejecutando SP: dbo.usp_get_promociones_restaurante");
 
-            System.out.println("=== EJECUTANDO PROCEDIMIENTO ALMACENADO ===");
+            MapSqlParameterSource params = new MapSqlParameterSource()
+                    .addValue("nro_restaurante", nroRestaurante)
+                    .addValue("soloVigentes", soloVigentes == null ? 0 : (soloVigentes ? 1 : 0))
+                    .addValue("nro_sucursal", nroSucursal);
 
-            // CAMBIO: Usar query() en lugar de queryForObject()
-            List<String> jsonResults = jdbcTemplate.query(sql, (rs, rowNum) -> {
-                return rs.getString(1); // Obtener la primera columna como string
-            });
+            // Ejecutar y recuperar todo (incluye result sets)
+            Map<String, Object> out = simpleJdbcCallFactory.executeReturningEverything(
+                    "usp_get_promociones_restaurante",
+                    "dbo",
+                    params
+            );
 
-            System.out.println("Número de filas obtenidas: " + jsonResults.size());
+            // SQL Server suele devolver el FOR JSON en el primer result set como filas que pueden venir fragmentadas.
+            // Clave convencional: "#result-set-1"
+            Object rs1 = out.get("#result-set-1");
+            if (!(rs1 instanceof List)) {
+                throw new RuntimeException("El procedimiento no devolvió el result set esperado (#result-set-1)");
+            }
 
-            if (jsonResults.isEmpty()) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> rows = (List<Map<String, Object>>) rs1;
+            if (rows.isEmpty()) {
                 throw new RuntimeException("No se obtuvieron resultados del procedimiento");
             }
 
-            // Tomar la primera fila (o decidir qué hacer con múltiples filas)
-            String jsonResult = jsonResults.get(0);
-            System.out.println("JSON obtenido (primera fila): " + jsonResult);
-
-            // Si hay múltiples filas, mostrar warning
-            if (jsonResults.size() > 1) {
-                System.out.println("⚠️  ADVERTENCIA: El procedimiento devolvió " + jsonResults.size() + " filas. Usando la primera.");
-                for (int i = 0; i < jsonResults.size(); i++) {
-                    System.out.println("Fila " + i + ": " + jsonResults.get(i));
+            // Concatenar los fragmentos (cada fila trae un único valor: el trozo de JSON)
+            StringBuilder sb = new StringBuilder();
+            for (Map<String, Object> row : rows) {
+                // Tomamos el primer valor de la fila (columna sin alias en el SP)
+                Object firstVal = row.values().stream().findFirst().orElse(null);
+                if (firstVal != null) {
+                    sb.append(String.valueOf(firstVal));
                 }
             }
 
-            // Convertir JSON a objeto RestaurantResponse
-            RestaurantResponse restaurantResponse = gson.fromJson(jsonResult, RestaurantResponse.class);
+            String jsonResult = sb.toString();
+            logger.debug("JSON obtenido (longitud={}): {}", jsonResult.length(), jsonResult.length() < 2048 ? jsonResult : "<omitted>");
 
-            System.out.println("Restaurante: " + restaurantResponse.getRazon_social());
-            System.out.println("Número de contenidos: " + restaurantResponse.getContenidos().size());
+            if (jsonResult.isEmpty()) {
+                throw new RuntimeException("El JSON devuelto está vacío");
+            }
+
+            // Normalizar JSON cuando 'contenidos' viene doblemente serializado (string)
+            JsonObject root = JsonParser.parseString(jsonResult).getAsJsonObject();
+            if (root.has("contenidos")) {
+                JsonElement contenidos = root.get("contenidos");
+                if (contenidos.isJsonPrimitive() && contenidos.getAsJsonPrimitive().isString()) {
+                    try {
+                        JsonElement parsed = JsonParser.parseString(contenidos.getAsString());
+                        root.add("contenidos", parsed);
+                        logger.debug("Campo 'contenidos' normalizado desde string JSON a arreglo/objeto JSON.");
+                    } catch (Exception ex) {
+                        logger.warn("No se pudo parsear 'contenidos' como JSON embebido: {}", ex.getMessage());
+                    }
+                }
+            }
+
+            // Parsear a objeto
+            RestaurantResponse restaurantResponse = gson.fromJson(root, RestaurantResponse.class);
+
+            if (restaurantResponse == null) {
+                throw new RuntimeException("No se pudo parsear el JSON a RestaurantResponse");
+            }
+
+            if (restaurantResponse.getContenidos() == null) {
+                logger.warn("'contenidos' vino nulo en el JSON");
+            } else {
+                logger.info("Número de contenidos: {}", restaurantResponse.getContenidos().size());
+            }
 
             return restaurantResponse;
 
         } catch (Exception e) {
-            System.err.println("=== ERROR EN REPOSITORY ===");
-            System.err.println("Mensaje: " + e.getMessage());
-            e.printStackTrace();
+            logger.error("Error al obtener promociones: {}", e.getMessage(), e);
             throw new RuntimeException("Error al obtener promociones desde la base de datos", e);
         }
     }

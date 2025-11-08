@@ -10,6 +10,8 @@ public class PromotionContent {
     private String contenido_promocional;
     private String contenido_a_publicar;
     private String fecha_ini_vigencia;
+    private String fecha_fin_vigencia; // Nuevo campo
+    private String imagen_promocional; // Nuevo campo
     private Double costo_click;
     private String cod_contenido_restaurante;
     private Boolean vigente;
@@ -44,6 +46,12 @@ public class PromotionContent {
 
     public String getFecha_ini_vigencia() { return fecha_ini_vigencia; }
     public void setFecha_ini_vigencia(String fecha_ini_vigencia) { this.fecha_ini_vigencia = fecha_ini_vigencia; }
+
+    public String getFecha_fin_vigencia() { return fecha_fin_vigencia; }
+    public void setFecha_fin_vigencia(String fecha_fin_vigencia) { this.fecha_fin_vigencia = fecha_fin_vigencia; }
+
+    public String getImagen_promocional() { return imagen_promocional; }
+    public void setImagen_promocional(String imagen_promocional) { this.imagen_promocional = imagen_promocional; }
 
     public Double getCosto_click() { return costo_click; }
     public void setCosto_click(Double costo_click) { this.costo_click = costo_click; }
