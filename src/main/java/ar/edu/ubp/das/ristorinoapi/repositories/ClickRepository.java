@@ -82,32 +82,6 @@ public class ClickRepository {
         });
     }
 
-    /**
-     * Registra click anónimo dado solo el nro_contenido. Resuelve restaurante e idioma.
-     * Asume que nro_contenido identifica una única fila en contenidos_restaurantes; si hay varias, toma la primera.
-     * @param nroContenido id del contenido a registrar click
-     * @param fechaRegistro fecha/hora del click o null
-     * @return respuesta parseada del SP
-     */
-    public Map<String, Object> registerAnonymousClickByContenido(Integer nroContenido, LocalDateTime fechaRegistro) {
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT TOP 1 nro_restaurante, nro_idioma FROM dbo.contenidos_restaurantes WHERE nro_contenido = ? ORDER BY nro_restaurante, nro_idioma",
-                nroContenido
-        );
-        if (rows.isEmpty()) {
-            throw new IllegalArgumentException("Contenido inexistente para nro_contenido=" + nroContenido);
-        }
-        Map<String, Object> row = rows.get(0);
-        Number nroRestN = (Number) row.get("nro_restaurante");
-        Number nroIdioN = (Number) row.get("nro_idioma");
-        if (nroRestN == null || nroIdioN == null) {
-            throw new IllegalStateException("No se pudo resolver nro_restaurante/nro_idioma para nro_contenido=" + nroContenido);
-        }
-        Integer nroRestaurante = nroRestN.intValue();
-        Integer nroIdioma = nroIdioN.intValue();
-        log.info("Registrando click anónimo: contenido={}, restaurante={}, idioma={}", nroContenido, nroRestaurante, nroIdioma);
-        return registerAnonymousClick(nroRestaurante, nroIdioma, nroContenido, fechaRegistro);
-    }
 
     /**
      * Obtiene todos los clicks no notificados (notificado = 0) opcionalmente filtrando por restaurante, idioma o contenido.

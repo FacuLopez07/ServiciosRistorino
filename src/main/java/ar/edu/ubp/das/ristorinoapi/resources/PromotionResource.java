@@ -31,37 +31,7 @@ public class PromotionResource {
     @Autowired
     private ClickRepository clickRepository;
 
-    /**
-     * Devuelve únicamente la lista de contenidos (promociones) para simplificar el consumo en Angular.
-     * Si no hay datos o contenidos es null, retorna una lista vacía (HTTP 200).
-     * @return ResponseEntity con arreglo de contenidos o lista vacía.
-     */
-    @GetMapping
-    public ResponseEntity<?> getPromotions() {
-        try {
-            System.out.println("=== SOLICITUD RECIBIDA PARA OBTENER PROMOCIONES (solo lista) ===");
 
-            RestaurantResponse restaurantData = promotionRepository.getPromotionsWithRestaurant();
-            if (restaurantData == null) {
-                return ResponseEntity.ok(java.util.Collections.emptyList());
-            }
-            System.out.println("Restaurante: " + restaurantData.getRazon_social());
-            if (restaurantData.getContenidos() == null) {
-                System.out.println("Promociones enviadas al cliente: 0 (lista vacía por contenidos nulo)");
-                return ResponseEntity.ok(java.util.Collections.emptyList());
-            }
-            System.out.println("Promociones enviadas al cliente: " + restaurantData.getContenidos().size());
-            // Devolvemos directamente la lista para que el frontend tipado a Promotion[] consuma sin wrapper.
-            return ResponseEntity.ok(restaurantData.getContenidos());
-
-        } catch (Exception e) {
-            System.err.println("=== ERROR EN CONTROLLER ===");
-            System.err.println("Error: " + e.getMessage());
-
-            return ResponseEntity.internalServerError()
-                    .body("Error interno del servidor: " + e.getMessage());
-        }
-    }
 
     /**
      * Versión parametrizada: permite filtrar por vigencia actual y por sucursal.
