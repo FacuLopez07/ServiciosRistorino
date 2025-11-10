@@ -14,6 +14,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Repositorio para registrar clicks sobre contenidos promocionales.
+ * Envuelve llamados a procedimientos almacenados y normaliza el JSON de respuesta.
+ */
 @Repository
 public class ClickRepository {
 
@@ -28,6 +32,11 @@ public class ClickRepository {
     /**
      * Ejecuta el procedimiento almacenado para registrar un click anónimo.
      * Devuelve un Map con keys "click" y "contenido" mapeadas como objetos (no strings JSON).
+     * @param nroRestaurante restaurante asociado
+     * @param nroIdioma idioma del contenido
+     * @param nroContenido identificador del contenido
+     * @param fechaRegistro fecha/hora a registrar; si es null la define el SP
+     * @return mapa con la respuesta del SP parseada a estructuras Java
      */
     public Map<String, Object> registerAnonymousClick(Integer nroRestaurante,
                                                       Integer nroIdioma,
@@ -60,6 +69,7 @@ public class ClickRepository {
                 Map<String, Object> parsed = objectMapper.readValue(json, Map.class);
                 return parsed;
             } catch (Exception ex) {
+                // Si algo falla en el parse, devolvemos el JSON crudo para facilitar el diagnóstico
                 Map<String, Object> fallback = new HashMap<>();
                 fallback.put("raw", json);
                 fallback.put("error", "No se pudo parsear JSON devuelto: " + ex.getMessage());
@@ -71,6 +81,9 @@ public class ClickRepository {
     /**
      * Registra click anónimo dado solo el nro_contenido. Resuelve restaurante e idioma.
      * Asume que nro_contenido identifica una única fila en contenidos_restaurantes; si hay varias, toma la primera.
+     * @param nroContenido id del contenido a registrar click
+     * @param fechaRegistro fecha/hora del click o null
+     * @return respuesta parseada del SP
      */
     public Map<String, Object> registerAnonymousClickByContenido(Integer nroContenido, LocalDateTime fechaRegistro) {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(

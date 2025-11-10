@@ -16,6 +16,11 @@ import java.util.Map;
 import ar.edu.ubp.das.ristorinoapi.components.SimpleJdbcCallFactory;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 
+/**
+ * Repositorio encargado de obtener las promociones de un restaurante vía SP SQL Server.
+ * El procedimiento {@code dbo.usp_get_promociones_restaurante} devuelve un JSON (FOR JSON PATH)
+ * que se parsea y normaliza para mapearlo a {@link RestaurantResponse}.
+ */
 @Repository
 public class PromotionRepository {
 
@@ -26,13 +31,22 @@ public class PromotionRepository {
 
     private final Gson gson = new Gson();
 
-    // Método actual conservado para compatibilidad
+    /**
+     * Obtiene promociones para el restaurante default (id=1) sin filtros.
+     * Delegado al método parametrizado para mantener una única lógica.
+     */
     public RestaurantResponse getPromotionsWithRestaurant() {
         // Por ahora usamos el restaurante 1, sin filtro de vigencia ni sucursal
         return getPromotionsWithRestaurant(1, null, null);
     }
 
-    // Nuevo método parametrizado, usando SimpleJdbcCall
+    /**
+     * Obtiene promociones invocando el SP con parámetros.
+     * @param nroRestaurante id del restaurante (obligatorio)
+     * @param soloVigentes true para filtrar solo vigentes, null equivale a false
+     * @param nroSucursal sucursal específica o null para todas/globales
+     * @return respuesta mapeada a {@link RestaurantResponse}
+     */
     public RestaurantResponse getPromotionsWithRestaurant(Integer nroRestaurante, Boolean soloVigentes, Integer nroSucursal) {
         try {
             logger.info("Ejecutando SP: dbo.usp_get_promociones_restaurante");
@@ -94,7 +108,7 @@ public class PromotionRepository {
                 }
             }
 
-            // Parsear a objeto
+            // Parsear a objeto usando Gson
             RestaurantResponse restaurantResponse = gson.fromJson(root, RestaurantResponse.class);
 
             if (restaurantResponse == null) {
@@ -115,3 +129,4 @@ public class PromotionRepository {
         }
     }
 }
+

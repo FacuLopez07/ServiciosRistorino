@@ -1,5 +1,10 @@
 package ar.edu.ubp.das.ristorinoapi.beans;
 
+/**
+ * DTO histórico de promoción simple.
+ * Actualmente no es el modelo principal expuesto por /api/promotions (se usa {@link PromotionContent}).
+ * Se mantiene por compatibilidad/ejemplos.
+ */
 public class Promotion {
     private Long id;
     private String titulo;
@@ -9,10 +14,9 @@ public class Promotion {
     private String ruta;
     private Boolean activa; // Se agrego para probar la nueva conexion a la base
 
-    // Constructor vacío
+    /** Constructor vacío para frameworks de deserialización */
     public Promotion() {}
 
-    // Getters y Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 

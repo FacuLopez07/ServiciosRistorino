@@ -1,11 +1,7 @@
 package ar.edu.ubp.das.ristorinoapi.resources;
 
-// CAMBIO: Agregar import de RestaurantResponse
 import ar.edu.ubp.das.ristorinoapi.beans.RestaurantResponse;
-// import ar.edu.ubp.das.ristorinoapi.beans.PromotionContent; // Import necesario para lista directa
 import ar.edu.ubp.das.ristorinoapi.repositories.PromotionRepository;
-// Agregados para registrar clicks
-import ar.edu.ubp.das.ristorinoapi.beans.ClickRequest;
 import ar.edu.ubp.das.ristorinoapi.repositories.ClickRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +9,16 @@ import org.springframework.web.bind.annotation.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Controlador REST para exponer promociones y registrar clicks.
+ *
+ * Endpoints expuestos:
+ * - GET /api/promotions: devuelve directamente la lista de contenidos promocionales (PromotionContent[])
+ *   para el restaurante por defecto.
+ * - GET /api/promotions/{nroRestaurante}?soloVigentes&nroSucursal: versión parametrizada que devuelve el objeto
+ *   completo del restaurante con su lista de contenidos.
+ * - POST /api/promotions/{nroContenido}/click: registra un click anónimo resolviendo restaurante/idioma por nroContenido.
+ */
 @RestController
 @RequestMapping("/api/promotions")
 @CrossOrigin(origins = "http://localhost:4200", allowedHeaders = "*", methods = { RequestMethod.GET, RequestMethod.POST, RequestMethod.OPTIONS })
@@ -22,10 +28,14 @@ public class PromotionResource {
 
     @Autowired
     private PromotionRepository promotionRepository;
-    // Inyección repositorio de clicks
     @Autowired
     private ClickRepository clickRepository;
 
+    /**
+     * Devuelve únicamente la lista de contenidos (promociones) para simplificar el consumo en Angular.
+     * Si no hay datos o contenidos es null, retorna una lista vacía (HTTP 200).
+     * @return ResponseEntity con arreglo de contenidos o lista vacía.
+     */
     @GetMapping
     public ResponseEntity<?> getPromotions() {
         try {
@@ -41,7 +51,7 @@ public class PromotionResource {
                 return ResponseEntity.ok(java.util.Collections.emptyList());
             }
             System.out.println("Promociones enviadas al cliente: " + restaurantData.getContenidos().size());
-            // DEVOLVER directamente la lista de contenidos
+            // Devolvemos directamente la lista para que el frontend tipado a Promotion[] consuma sin wrapper.
             return ResponseEntity.ok(restaurantData.getContenidos());
 
         } catch (Exception e) {
@@ -53,7 +63,10 @@ public class PromotionResource {
         }
     }
 
-    // Nuevo endpoint con parámetros
+    /**
+     * Versión parametrizada: permite filtrar por vigencia actual y por sucursal.
+     * Los parámetros son opcionales; si no se indican, el SP devuelve todo.
+     */
     @GetMapping("/{nroRestaurante}")
     public ResponseEntity<?> getPromotionsForRestaurant(
             @PathVariable Integer nroRestaurante,
@@ -69,47 +82,11 @@ public class PromotionResource {
         }
     }
 
-    // Endpoint para registrar click: acepta body completo o solo nroContenido
-    @PostMapping("/clicks")
-    public ResponseEntity<?> registerClick(@RequestBody ClickRequest request) {
-        try {
-            if (request.getNroContenido() == null) {
-                return ResponseEntity.badRequest().body("Debe enviar al menos nroContenido");
-            }
-            var result = (request.getNroRestaurante() == null || request.getNroIdioma() == null)
-                    ? clickRepository.registerAnonymousClickByContenido(request.getNroContenido(), request.getFechaRegistro())
-                    : clickRepository.registerAnonymousClick(
-                        request.getNroRestaurante(),
-                        request.getNroIdioma(),
-                        request.getNroContenido(),
-                        request.getFechaRegistro()
-                    );
-            return ResponseEntity.ok(result);
-        } catch (IllegalArgumentException iae) {
-            log.warn("Registro de click rechazado: {}", iae.getMessage());
-            return ResponseEntity.status(404).body(iae.getMessage());
-        } catch (Exception e) {
-            log.error("Error al registrar click", e);
-            return ResponseEntity.internalServerError().body("Error al registrar click: " + e.getMessage());
-        }
-    }
-
-    // Endpoint alternativo que recibe solo el id del contenido por path (útil para frontend que llama con .id)
-    @PostMapping("/clicks/{nroContenido}")
-    public ResponseEntity<?> registerClickByContenido(@PathVariable Integer nroContenido) {
-        try {
-            var result = clickRepository.registerAnonymousClickByContenido(nroContenido, null);
-            return ResponseEntity.ok(result);
-        } catch (IllegalArgumentException iae) {
-            log.warn("Registro de click rechazado: {}", iae.getMessage());
-            return ResponseEntity.status(404).body(iae.getMessage());
-        } catch (Exception e) {
-            log.error("Error al registrar click", e);
-            return ResponseEntity.internalServerError().body("Error al registrar click: " + e.getMessage());
-        }
-    }
-
-    // NUEVO: endpoint compatible con la URL /api/promotions/{nroContenido}/click usada por el frontend
+    /**
+     * Registra un click anónimo sobre un contenido específico.
+     * Resuelve restaurante e idioma en base al nroContenido.
+     * @param nroContenido id del contenido
+     */
     @PostMapping("/{nroContenido}/click")
     public ResponseEntity<?> registerClickByContenidoAlt(@PathVariable Integer nroContenido) {
         try {
