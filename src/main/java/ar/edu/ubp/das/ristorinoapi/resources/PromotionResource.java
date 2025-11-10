@@ -83,14 +83,20 @@ public class PromotionResource {
     }
 
     /**
-     * Registra un click anónimo sobre un contenido específico.
-     * Resuelve restaurante e idioma en base al nroContenido.
-     * @param nroContenido id del contenido
+     * Registra un click anónimo sobre un contenido específico indicando explícitamente restaurante e idioma.
+     * Útil cuando el frontend conoce las tres claves.
+     * Si alguno de los path variables llega null (binding fallido) retorna 400.
      */
-    @PostMapping("/{nroContenido}/click")
-    public ResponseEntity<?> registerClickByContenidoAlt(@PathVariable Integer nroContenido) {
+    @PostMapping("/{nroRestaurante}/{nroIdioma}/{nroContenido}/click")
+    public ResponseEntity<?> registerClickByContenidoAlt(
+            @PathVariable Integer nroRestaurante,
+            @PathVariable Integer nroIdioma,
+            @PathVariable Integer nroContenido) {
         try {
-            var result = clickRepository.registerAnonymousClickByContenido(nroContenido, null);
+            if (nroRestaurante == null || nroIdioma == null || nroContenido == null) {
+                return ResponseEntity.badRequest().body("Debe indicar nroRestaurante, nroIdioma y nroContenido en la URL");
+            }
+            var result = clickRepository.registerAnonymousClick(nroRestaurante, nroIdioma, nroContenido, null);
             return ResponseEntity.ok(result);
         } catch (IllegalArgumentException iae) {
             log.warn("Registro de click rechazado: {}", iae.getMessage());
@@ -100,4 +106,5 @@ public class PromotionResource {
             return ResponseEntity.internalServerError().body("Error al registrar click: " + e.getMessage());
         }
     }
+
 }

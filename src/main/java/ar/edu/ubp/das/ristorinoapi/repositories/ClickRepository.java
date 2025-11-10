@@ -43,6 +43,9 @@ public class ClickRepository {
                                                       Integer nroIdioma,
                                                       Integer nroContenido,
                                                       LocalDateTime fechaRegistro) {
+        if (nroRestaurante == null || nroIdioma == null || nroContenido == null) {
+            throw new IllegalArgumentException("Parametros requeridos nroRestaurante, nroIdioma y nroContenido no pueden ser null");
+        }
         String sql = "EXEC dbo.usp_registrar_click_contenido_restaurante ?, ?, ?, ?, ?";
         return jdbcTemplate.query(con -> {
             var ps = con.prepareStatement(sql);
