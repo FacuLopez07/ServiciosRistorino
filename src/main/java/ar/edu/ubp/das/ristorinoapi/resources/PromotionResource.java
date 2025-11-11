@@ -32,9 +32,8 @@ public class PromotionResource {
     private ClickRepository clickRepository;
 
 
-
     /**
-     * Versión parametrizada: permite filtrar por vigencia actual y por sucursal.
+     * Permite filtrar por vigencia actual y por sucursal.
      * Los parámetros son opcionales; si no se indican, el SP devuelve todo.
      */
     @GetMapping("/{nroRestaurante}")
@@ -54,7 +53,6 @@ public class PromotionResource {
 
     /**
      * Registra un click anónimo sobre un contenido específico indicando explícitamente restaurante e idioma.
-     * Útil cuando el frontend conoce las tres claves.
      * Si alguno de los path variables llega null (binding fallido) retorna 400.
      */
     @PostMapping("/{nroRestaurante}/{nroIdioma}/{nroContenido}/click")

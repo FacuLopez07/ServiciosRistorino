@@ -8,8 +8,8 @@ import java.time.LocalDateTime;
  * el backend intentará resolverlos con una consulta auxiliar.
  */
 public class ClickRequest {
-    private Integer nroRestaurante; // Opcional: si es null se intenta resolver por nroContenido
-    private Integer nroIdioma;      // Opcional: si es null se intenta resolver por nroContenido
+    private Integer nroRestaurante; //Requerido para registrar el click
+    private Integer nroIdioma;      // Requerido para registrar el click
     private Integer nroContenido;   // Requerido para registrar el click
     private LocalDateTime fechaRegistro; // Opcional, null -> lo define el SP (GETDATE())
 

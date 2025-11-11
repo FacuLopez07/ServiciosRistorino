@@ -32,7 +32,7 @@ public class ClickRepository {
 
     /**
      * Ejecuta el procedimiento almacenado para registrar un click anónimo.
-     * Devuelve un Map con keys "click" y "contenido" mapeadas como objetos (no strings JSON).
+     * Devuelve un Map con keys "click" y "contenido" mapeadas como objetos.
      * @param nroRestaurante restaurante asociado
      * @param nroIdioma idioma del contenido
      * @param nroContenido identificador del contenido
