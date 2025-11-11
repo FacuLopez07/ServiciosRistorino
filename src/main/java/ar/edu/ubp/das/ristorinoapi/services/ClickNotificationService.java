@@ -16,6 +16,10 @@ import java.util.Map;
 /**
  * Servicio manual para notificar a los restaurantes los clicks pendientes y marcarlos como notificados.
  * Este servicio NO se ejecuta automáticamente; debe invocarse manualmente (línea de comando o endpoint protected).
+ *
+ * Contrato actual de notificación (API restaurante):
+ * POST http://localhost:8085/api/v1/clicks
+ * Body: { "codContenidoRestaurante": "MilaPapaBeb_1", "costoClick": 42.50 }
  */
 @Service
 public class ClickNotificationService {
@@ -43,27 +47,34 @@ public class ClickNotificationService {
         }
         int okCount = 0;
         for (Map<String, Object> row : rows) {
-            // Extraer datos necesarios
+            // Extraer datos necesarios desde 'click'
             Integer nroRestaurante = asInt(row.get("nro_restaurante"));
             Integer nroIdioma = asInt(row.get("nro_idioma"));
             Integer nroContenido = asInt(row.get("nro_contenido"));
             Integer nroClick = asInt(row.get("nro_click"));
             Double costoClick = asDouble(row.getOrDefault("costo_click", row.get("costoClick")));
+            // Extraer código del contenido (del bloque 'contenido')
+            Object codContenidoObj = row.getOrDefault("cod_contenido_restaurante", row.get("codContenidoRestaurante"));
+            String codContenidoRestaurante = codContenidoObj != null ? codContenidoObj.toString() : null;
 
             if (nroRestaurante == null || nroContenido == null || nroClick == null) {
                 log.warn("Fila inválida, faltan claves: {}", row);
                 continue;
             }
+            if (codContenidoRestaurante == null || codContenidoRestaurante.isBlank()) {
+                log.warn("Fila sin cod_contenido_restaurante, se omite notificación: click={}", nroClick);
+                continue;
+            }
 
             try {
-                // Construir payload para el restaurante
+                // Construir payload para el restaurante según contrato vigente
                 Map<String, Object> payload = Map.of(
-                        "nroRestaurante", nroRestaurante,
-                        "nroContenido", nroContenido,
+                        "codContenidoRestaurante", codContenidoRestaurante,
                         "costoClick", costoClick != null ? costoClick : 0.0
                 );
                 HttpHeaders headers = new HttpHeaders();
                 headers.setContentType(MediaType.APPLICATION_JSON);
+                headers.setAccept(List.of(MediaType.APPLICATION_JSON));
                 HttpEntity<Map<String, Object>> req = new HttpEntity<>(payload, headers);
 
                 // POST al restaurante
@@ -77,7 +88,7 @@ public class ClickNotificationService {
                         log.warn("Click {} notificado pero no se confirmó en BD.", nroClick);
                     }
                 } else {
-                    log.warn("Falla notificando click {}: status {}", nroClick, resp.getStatusCode());
+                    log.warn("Falla notificando click {}: status {} body {}", nroClick, resp.getStatusCode(), resp.getBody());
                 }
             } catch (Exception ex) {
                 log.error("Error notificando click {}: {}", nroClick, ex.getMessage());
@@ -96,4 +107,3 @@ public class ClickNotificationService {
         try { return o != null ? Double.parseDouble(o.toString()) : null; } catch (Exception e) { return null; }
     }
 }
-
