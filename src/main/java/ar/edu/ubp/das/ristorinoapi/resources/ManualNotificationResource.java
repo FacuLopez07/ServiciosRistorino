@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -38,18 +39,24 @@ public class ManualNotificationResource {
     public ResponseEntity<?> notifyClicks(@RequestParam(required = false) Integer nroRestaurante) {
         try {
             int count = clickNotificationService.notifyAllPendingClicks(nroRestaurante);
-            Map<String, Object> body = Map.of(
-                    "nroRestauranteFilter", nroRestaurante,
-                    "notificadosExitosos", count,
-                    "timestamp", Instant.now().toString()
-            );
+            // Map.of no permite valores null -> usar mapa mutable
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("notificadosExitosos", count);
+            if (nroRestaurante != null) {
+                body.put("nroRestauranteFilter", nroRestaurante);
+            }
+            body.put("timestamp", Instant.now().toString());
             return ResponseEntity.ok(body);
         } catch (Exception e) {
             log.error("Error en notificación manual", e);
-            return ResponseEntity.internalServerError().body(Map.of(
-                    "error", e.getMessage(),
-                    "timestamp", Instant.now().toString()
-            ));
+            Map<String, Object> err = new LinkedHashMap<>();
+            if (e.getMessage() != null) {
+                err.put("error", e.getMessage());
+            } else {
+                err.put("error", e.getClass().getSimpleName());
+            }
+            err.put("timestamp", Instant.now().toString());
+            return ResponseEntity.internalServerError().body(err);
         }
     }
 }
