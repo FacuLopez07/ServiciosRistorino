@@ -21,7 +21,6 @@ import org.slf4j.LoggerFactory;
  */
 @RestController
 @RequestMapping("/api/promotions")
-@CrossOrigin(origins = "http://localhost:4200", allowedHeaders = "*", methods = { RequestMethod.GET, RequestMethod.POST, RequestMethod.OPTIONS })
 public class PromotionResource {
 
     private static final Logger log = LoggerFactory.getLogger(PromotionResource.class);
