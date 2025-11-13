@@ -13,13 +13,19 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Recurso manual para disparar la notificación de clicks pendientes.
- * <p>La autenticación JWT hacia la API del restaurante ahora se realiza dentro de
- * {@link ClickNotificationService}, por lo que este endpoint sólo coordina el proceso.
- * Se recomienda protegerlo (por ejemplo con un token interno o Spring Security) para evitar
- * ejecuciones no autorizadas.</p>
- * <p>Uso: POST /api/manual/notify-clicks?nroRestaurante=1 (parámetro opcional).
- * Devuelve un JSON con la cantidad de clicks notificados y marca como notificados en BD.</p>
+ * Recurso REST manual para disparar la notificación de clicks pendientes.
+ * <p>Este endpoint no registra nuevos clicks, sólo procesa aquellos que ya existen y están marcados como no notificados.</p>
+ * <p>La autenticación contra la API externa del restaurante (JWT Bearer) se maneja dentro de {@link ClickNotificationService}.
+ * Es recomendable proteger este recurso con autenticación propia para evitar ejecuciones no autorizadas.</p>
+ * <p>Uso típico:
+ * <pre>POST /api/manual/notify-clicks              --> Notifica todos los pendientes
+ * POST /api/manual/notify-clicks?nroRestaurante=5 --> Sólo pendientes del restaurante 5</pre></p>
+ * Respuesta JSON:
+ * <pre>{
+ *   "notificadosExitosos": 3,
+ *   "nroRestauranteFilter": 5,
+ *   "timestamp": "2025-11-13T18:20:01Z"
+ * }</pre>
  */
 @RestController
 @RequestMapping("/api/manual")
@@ -32,15 +38,15 @@ public class ManualNotificationResource {
 
     /**
      * Dispara la notificación de todos los clicks pendientes (opcionalmente filtrando por restaurante).
-     * @param nroRestaurante filtro opcional por restaurante.
-     * @return JSON con total exitosos y metadata.
+     * Cada click exitoso se marca como notificado en la base de datos.
+     * @param nroRestaurante filtro opcional por restaurante (null = todos)
+     * @return ResponseEntity con cuerpo JSON detallando resultado del proceso
      */
     @PostMapping(value = "/notify-clicks", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> notifyClicks(@RequestParam(required = false) Integer nroRestaurante) {
         try {
             int count = clickNotificationService.notifyAllPendingClicks(nroRestaurante);
-            // Map.of no permite valores null -> usar mapa mutable
-            Map<String, Object> body = new LinkedHashMap<>();
+            Map<String, Object> body = new LinkedHashMap<>(); // Map.of no admite valores potencialmente null
             body.put("notificadosExitosos", count);
             if (nroRestaurante != null) {
                 body.put("nroRestauranteFilter", nroRestaurante);
@@ -50,11 +56,7 @@ public class ManualNotificationResource {
         } catch (Exception e) {
             log.error("Error en notificación manual", e);
             Map<String, Object> err = new LinkedHashMap<>();
-            if (e.getMessage() != null) {
-                err.put("error", e.getMessage());
-            } else {
-                err.put("error", e.getClass().getSimpleName());
-            }
+            err.put("error", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
             err.put("timestamp", Instant.now().toString());
             return ResponseEntity.internalServerError().body(err);
         }

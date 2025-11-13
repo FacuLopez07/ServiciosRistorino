@@ -10,14 +10,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Controlador REST para exponer promociones y registrar clicks.
- *
- * Endpoints expuestos:
- * - GET /api/promotions: devuelve directamente la lista de contenidos promocionales (PromotionContent[])
- *   para el restaurante por defecto.
- * - GET /api/promotions/{nroRestaurante}?soloVigentes&nroSucursal: versión parametrizada que devuelve el objeto
- *   completo del restaurante con su lista de contenidos.
- * - POST /api/promotions/{nroContenido}/click: registra un click anónimo resolviendo restaurante/idioma por nroContenido.
+ * Controlador REST para exponer promociones y registrar clicks sobre contenidos.
+ * Endpoints principales:
+ * <ul>
+ *   <li>GET /api/promotions/{nroRestaurante}?soloVigentes&nroSucursal<br>
+ *       Devuelve estructura {@link RestaurantResponse} con lista de contenidos filtrados opcionalmente.</li>
+ *   <li>POST /api/promotions/{nroRestaurante}/{nroIdioma}/{nroContenido}/click<br>
+ *       Registra un click anónimo sobre un contenido específico.</li>
+ * </ul>
  */
 @RestController
 @RequestMapping("/api/promotions")
@@ -30,10 +30,12 @@ public class PromotionResource {
     @Autowired
     private ClickRepository clickRepository;
 
-
     /**
-     * Permite filtrar por vigencia actual y por sucursal.
-     * Los parámetros son opcionales; si no se indican, el SP devuelve todo.
+     * Obtiene las promociones de un restaurante en formato compuesto (incluye metadatos del restaurante).
+     * @param nroRestaurante id del restaurante
+     * @param soloVigentes filtro opcional de vigencia (null = no filtra)
+     * @param nroSucursal sucursal específica (null = todas/globales)
+     * @return {@link RestaurantResponse} serializado a JSON
      */
     @GetMapping("/{nroRestaurante}")
     public ResponseEntity<?> getPromotionsForRestaurant(
@@ -44,6 +46,8 @@ public class PromotionResource {
         try {
             RestaurantResponse restaurantData = promotionRepository.getPromotionsWithRestaurant(nroRestaurante, soloVigentes, nroSucursal);
             return ResponseEntity.ok(restaurantData);
+        } catch (IllegalArgumentException iae) {
+            return ResponseEntity.badRequest().body(iae.getMessage());
         } catch (Exception e) {
             return ResponseEntity.internalServerError()
                     .body("Error interno del servidor: " + e.getMessage());
@@ -51,8 +55,11 @@ public class PromotionResource {
     }
 
     /**
-     * Registra un click anónimo sobre un contenido específico indicando explícitamente restaurante e idioma.
-     * Si alguno de los path variables llega null (binding fallido) retorna 400.
+     * Registra un click anónimo sobre un contenido específico.
+     * @param nroRestaurante id restaurante
+     * @param nroIdioma id idioma
+     * @param nroContenido id contenido
+     * @return resultado del procedimiento almacenado (JSON deserializado a Map)
      */
     @PostMapping("/{nroRestaurante}/{nroIdioma}/{nroContenido}/click")
     public ResponseEntity<?> registerClickByContenidoAlt(
@@ -60,14 +67,11 @@ public class PromotionResource {
             @PathVariable Integer nroIdioma,
             @PathVariable Integer nroContenido) {
         try {
-            if (nroRestaurante == null || nroIdioma == null || nroContenido == null) {
-                return ResponseEntity.badRequest().body("Debe indicar nroRestaurante, nroIdioma y nroContenido en la URL");
-            }
             var result = clickRepository.registerAnonymousClick(nroRestaurante, nroIdioma, nroContenido, null);
             return ResponseEntity.ok(result);
         } catch (IllegalArgumentException iae) {
             log.warn("Registro de click rechazado: {}", iae.getMessage());
-            return ResponseEntity.status(404).body(iae.getMessage());
+            return ResponseEntity.badRequest().body(iae.getMessage());
         } catch (Exception e) {
             log.error("Error al registrar click", e);
             return ResponseEntity.internalServerError().body("Error al registrar click: " + e.getMessage());

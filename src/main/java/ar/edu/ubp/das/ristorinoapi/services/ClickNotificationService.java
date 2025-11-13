@@ -19,14 +19,14 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
- * Servicio manual para notificar a los restaurantes los clicks pendientes y marcarlos como notificados.
- * Este servicio NO se ejecuta automáticamente; debe invocarse manualmente (línea de comando o endpoint protegido).
- *
- * Contrato actual de notificación (API restaurante):
- * POST http://localhost:8085/api/v1/clicks
- * Body: { "codContenidoRestaurante": "MilaPapaBeb_1", "costoClick": 42.50 }
- *
- * Autenticación actual: JWT Bearer con secreto HS256 y payload fijo {"registrador":"ristorino"}.
+ * Servicio para notificar a la API externa de los restaurantes los clicks pendientes de confirmación.
+ * <p>Recorre los registros no notificados y realiza POST al endpoint remoto. Si el POST es exitoso se marca
+ * el click como notificado en la base de datos. El endpoint remoto actualmente espera un JSON sencillo con
+ * el código externo del contenido y el costo del click.</p>
+ * <p>La autenticación se basa en JWT HS256 generado localmente con un secreto compartido y payload fijo
+ * que incluye campos estándar iat/exp para control de expiración.</p>
+ * <p>Este servicio fue concebido para ejecución manual (endpoint protegido o tarea administrativa); no se
+ * programa todavía como tarea automática/scheduler.</p>
  */
 @Service
 public class ClickNotificationService {
@@ -38,22 +38,22 @@ public class ClickNotificationService {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    // URL destino del restaurante (por ahora fija, podría parametrizarse/por restaurante)
+    // URL destino del restaurante (por ahora fija, se podría parametrizar por restaurante en el futuro)
     private static final String DEST_URL = "http://localhost:8085/api/v1/clicks";
 
     // Secreto provisto para generar el token JWT HS256
     private static final String JWT_SECRET = "ClaveSuperDuperHiperMegaSecreta12345";
-    // Duración del token en segundos (configurable). Evitamos generar token nuevo por cada click.
+    // Duración del token en segundos. Se reutiliza mientras esté vigente para evitar overhead.
     private static final long TOKEN_TTL_SECONDS = 300; // 5 minutos
 
-    // Cache simple del token actual y su expiración Unix epoch seconds
+    // Cache simple del token actual y su expiración (epoch seconds)
     private String cachedToken;
     private long cachedTokenExpEpoch;
 
     /**
-     * Recorre todos los clicks no notificados y los notifica uno a uno al restaurante correspondiente.
-     * Tras éxito de la notificación, marca el click como notificado en la base de datos.
-     * Devuelve la cantidad de notificaciones realizadas con éxito.
+     * Notifica todos los clicks no notificados obtenidos desde la base de datos.
+     * @param nroRestauranteFilter filtro opcional por restaurante (null = todos)
+     * @return cantidad de clicks notificados exitosamente
      */
     public int notifyAllPendingClicks(Integer nroRestauranteFilter) {
         List<Map<String, Object>> rows = clickRepository.getUnnotifiedClicks(nroRestauranteFilter, null, null);
@@ -64,13 +64,11 @@ public class ClickNotificationService {
         int okCount = 0;
         String bearerToken = getJwtToken();
         for (Map<String, Object> row : rows) {
-            // Extraer datos necesarios desde 'click'
             Integer nroRestaurante = asInt(row.get("nro_restaurante"));
             Integer nroIdioma = asInt(row.get("nro_idioma"));
             Integer nroContenido = asInt(row.get("nro_contenido"));
             Integer nroClick = asInt(row.get("nro_click"));
             Double costoClick = asDouble(row.getOrDefault("costo_click", row.get("costoClick")));
-            // Extraer código del contenido (del bloque 'contenido')
             Object codContenidoObj = row.getOrDefault("cod_contenido_restaurante", row.get("codContenidoRestaurante"));
             String codContenidoRestaurante = codContenidoObj != null ? codContenidoObj.toString() : null;
 
@@ -84,7 +82,6 @@ public class ClickNotificationService {
             }
 
             try {
-                // Construir payload para el restaurante según contrato vigente
                 Map<String, Object> payload = Map.of(
                         "codContenidoRestaurante", codContenidoRestaurante,
                         "costoClick", costoClick != null ? costoClick : 0.0
@@ -92,10 +89,9 @@ public class ClickNotificationService {
                 HttpHeaders headers = new HttpHeaders();
                 headers.setContentType(MediaType.APPLICATION_JSON);
                 headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-                headers.setBearerAuth(bearerToken); // Authorization: Bearer <token>
+                headers.setBearerAuth(bearerToken);
                 HttpEntity<Map<String, Object>> req = new HttpEntity<>(payload, headers);
 
-                // POST al restaurante
                 var resp = restTemplate.postForEntity(DEST_URL, req, String.class);
                 if (resp.getStatusCode().is2xxSuccessful() || resp.getStatusCode().value() == 201) {
                     boolean updated = clickRepository.confirmClickNotified(nroRestaurante, nroIdioma, nroContenido, nroClick);
@@ -117,7 +113,9 @@ public class ClickNotificationService {
     }
 
     /**
-     * Obtiene un token JWT HS256 con payload fijo {"registrador":"ristorino"}. Regenera cuando expira.
+     * Obtiene (o reutiliza) un token JWT HS256 con payload fijo {"registrador":"ristorino"}.
+     * Se agrega iat y exp para control de vigencia.
+     * @return token JWT listo para usar en Authorization Bearer
      */
     private synchronized String getJwtToken() {
         long now = Instant.now().getEpochSecond();
@@ -132,10 +130,13 @@ public class ClickNotificationService {
         String toSign = headerB64 + "." + payloadB64;
         String signatureB64 = hmacSha256Base64Url(toSign, JWT_SECRET);
         cachedToken = toSign + "." + signatureB64;
-        cachedTokenExpEpoch = exp - 5; // margen de seguridad
+        cachedTokenExpEpoch = exp - 5; // margen de seguridad antes de expirar
         return cachedToken;
     }
 
+    /**
+     * Genera firma HMAC SHA256 y la codifica en base64url.
+     */
     private String hmacSha256Base64Url(String data, String secret) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
@@ -147,16 +148,20 @@ public class ClickNotificationService {
         }
     }
 
+    /**
+     * Codifica bytes en Base64 y adapta a representación URL-safe sin padding.
+     */
     private String base64Url(byte[] bytes) {
         String b64 = Base64.getEncoder().encodeToString(bytes);
-        // JWT base64url: reemplaza + / y quita =
         return b64.replace('+', '-').replace('/', '_').replaceAll("=+$", "");
     }
 
+    /** Conversión segura a Integer desde objetos genéricos. */
     private Integer asInt(Object o) {
         if (o instanceof Number n) return n.intValue();
         try { return o != null ? Integer.parseInt(o.toString()) : null; } catch (Exception e) { return null; }
     }
+    /** Conversión segura a Double desde objetos genéricos. */
     private Double asDouble(Object o) {
         if (o instanceof Number n) return n.doubleValue();
         try { return o != null ? Double.parseDouble(o.toString()) : null; } catch (Exception e) { return null; }

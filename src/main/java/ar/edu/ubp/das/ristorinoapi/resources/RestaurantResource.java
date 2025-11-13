@@ -18,8 +18,10 @@ public class RestaurantResource {
     private RestaurantRepository restaurantRepository;
 
     /**
-     * Devuelve el detalle anidado del restaurante como JSON.
-     * Ej: GET /api/restaurants/1?nroIdioma=1
+     * Devuelve el detalle anidado del restaurante como JSON (sucursales, zonas, turnos, contenidos, etc.).
+     * @param nroRestaurante id del restaurante
+     * @param nroIdioma idioma preferido (null -> 1 por defecto en SP)
+     * @return JsonNode con la estructura completa o 404 si no existe
      */
     @GetMapping(value = "/{nroRestaurante}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> getRestaurantDetails(
@@ -39,4 +41,3 @@ public class RestaurantResource {
         }
     }
 }
-
