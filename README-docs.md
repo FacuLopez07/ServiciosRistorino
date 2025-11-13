@@ -20,7 +20,5 @@ Este proyecto es una API Spring Boot que expone información de promociones y de
 ## Base de datos
 - Los repositorios ejecutan procedimientos almacenados en SQL Server y parsean el JSON resultante (FOR JSON PATH).
 
-## Observaciones
-- `UnnotifiedClick` es un DTO no utilizado actualmente; puede eliminarse o usarse refactorizando `ClickRepository.getUnnotifiedClicks` para retornar una lista tipada.
-- `DEST_URL` y `JWT_SECRET` se recomienda externalizarlos a `application.properties`.
+
 

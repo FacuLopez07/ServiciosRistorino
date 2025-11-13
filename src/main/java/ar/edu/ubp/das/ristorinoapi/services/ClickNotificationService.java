@@ -4,6 +4,7 @@ import ar.edu.ubp.das.ristorinoapi.repositories.ClickRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -38,13 +39,13 @@ public class ClickNotificationService {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    // URL destino del restaurante (por ahora fija, se podría parametrizar por restaurante en el futuro)
-    private static final String DEST_URL = "http://localhost:8085/api/v1/clicks";
-
-    // Secreto provisto para generar el token JWT HS256
-    private static final String JWT_SECRET = "ClaveSuperDuperHiperMegaSecreta12345";
-    // Duración del token en segundos. Se reutiliza mientras esté vigente para evitar overhead.
-    private static final long TOKEN_TTL_SECONDS = 300; // 5 minutos
+    // URL destino del restaurante y secreto JWT ahora externalizados en application.properties
+    @Value("${ristorino.notification.dest-url}")
+    private String destUrl;
+    @Value("${ristorino.notification.jwt-secret}")
+    private String jwtSecret;
+    @Value("${ristorino.notification.jwt-ttl-seconds:300}")
+    private long tokenTtlSeconds;
 
     // Cache simple del token actual y su expiración (epoch seconds)
     private String cachedToken;
@@ -92,7 +93,7 @@ public class ClickNotificationService {
                 headers.setBearerAuth(bearerToken);
                 HttpEntity<Map<String, Object>> req = new HttpEntity<>(payload, headers);
 
-                var resp = restTemplate.postForEntity(DEST_URL, req, String.class);
+                var resp = restTemplate.postForEntity(destUrl, req, String.class);
                 if (resp.getStatusCode().is2xxSuccessful() || resp.getStatusCode().value() == 201) {
                     boolean updated = clickRepository.confirmClickNotified(nroRestaurante, nroIdioma, nroContenido, nroClick);
                     if (updated) {
@@ -122,13 +123,13 @@ public class ClickNotificationService {
         if (cachedToken != null && now < cachedTokenExpEpoch) {
             return cachedToken;
         }
-        long exp = now + TOKEN_TTL_SECONDS;
+        long exp = now + tokenTtlSeconds;
         String headerJson = "{\"alg\":\"HS256\",\"typ\":\"JWT\"}";
         String payloadJson = String.format("{\"registrador\":\"%s\",\"iat\":%d,\"exp\":%d}", "ristorino", now, exp);
         String headerB64 = base64Url(headerJson.getBytes(StandardCharsets.UTF_8));
         String payloadB64 = base64Url(payloadJson.getBytes(StandardCharsets.UTF_8));
         String toSign = headerB64 + "." + payloadB64;
-        String signatureB64 = hmacSha256Base64Url(toSign, JWT_SECRET);
+        String signatureB64 = hmacSha256Base64Url(toSign, jwtSecret);
         cachedToken = toSign + "." + signatureB64;
         cachedTokenExpEpoch = exp - 5; // margen de seguridad antes de expirar
         return cachedToken;
