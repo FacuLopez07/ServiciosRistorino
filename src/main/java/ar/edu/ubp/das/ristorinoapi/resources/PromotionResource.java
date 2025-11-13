@@ -3,7 +3,6 @@ package ar.edu.ubp.das.ristorinoapi.resources;
 import ar.edu.ubp.das.ristorinoapi.beans.RestaurantResponse;
 import ar.edu.ubp.das.ristorinoapi.repositories.PromotionRepository;
 import ar.edu.ubp.das.ristorinoapi.repositories.ClickRepository;
-import ar.edu.ubp.das.ristorinoapi.utils.B64uDecoder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -38,16 +37,13 @@ public class PromotionResource {
      */
     @GetMapping("/{nroRestaurante}")
     public ResponseEntity<?> getPromotionsForRestaurant(
-            @PathVariable String nroRestaurante,
+            @PathVariable Integer nroRestaurante,
             @RequestParam(required = false) Boolean soloVigentes,
             @RequestParam(required = false) Integer nroSucursal
     ) {
         try {
-            Integer restauranteId = B64uDecoder.decodeToInt(nroRestaurante);
-            RestaurantResponse restaurantData = promotionRepository.getPromotionsWithRestaurant(restauranteId, soloVigentes, nroSucursal);
+            RestaurantResponse restaurantData = promotionRepository.getPromotionsWithRestaurant(nroRestaurante, soloVigentes, nroSucursal);
             return ResponseEntity.ok(restaurantData);
-        } catch (IllegalArgumentException iae) {
-            return ResponseEntity.badRequest().body(iae.getMessage());
         } catch (Exception e) {
             return ResponseEntity.internalServerError()
                     .body("Error interno del servidor: " + e.getMessage());
@@ -60,18 +56,18 @@ public class PromotionResource {
      */
     @PostMapping("/{nroRestaurante}/{nroIdioma}/{nroContenido}/click")
     public ResponseEntity<?> registerClickByContenidoAlt(
-            @PathVariable String nroRestaurante,
-            @PathVariable String nroIdioma,
-            @PathVariable String nroContenido) {
+            @PathVariable Integer nroRestaurante,
+            @PathVariable Integer nroIdioma,
+            @PathVariable Integer nroContenido) {
         try {
-            Integer rest = B64uDecoder.decodeToInt(nroRestaurante);
-            Integer idioma = B64uDecoder.decodeToInt(nroIdioma);
-            Integer contenido = B64uDecoder.decodeToInt(nroContenido);
-            var result = clickRepository.registerAnonymousClick(rest, idioma, contenido, null);
+            if (nroRestaurante == null || nroIdioma == null || nroContenido == null) {
+                return ResponseEntity.badRequest().body("Debe indicar nroRestaurante, nroIdioma y nroContenido en la URL");
+            }
+            var result = clickRepository.registerAnonymousClick(nroRestaurante, nroIdioma, nroContenido, null);
             return ResponseEntity.ok(result);
         } catch (IllegalArgumentException iae) {
             log.warn("Registro de click rechazado: {}", iae.getMessage());
-            return ResponseEntity.badRequest().body(iae.getMessage());
+            return ResponseEntity.status(404).body(iae.getMessage());
         } catch (Exception e) {
             log.error("Error al registrar click", e);
             return ResponseEntity.internalServerError().body("Error al registrar click: " + e.getMessage());

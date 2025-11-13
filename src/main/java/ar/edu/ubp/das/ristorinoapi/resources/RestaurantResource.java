@@ -1,7 +1,6 @@
 package ar.edu.ubp.das.ristorinoapi.resources;
 
 import ar.edu.ubp.das.ristorinoapi.repositories.RestaurantRepository;
-import ar.edu.ubp.das.ristorinoapi.utils.B64uDecoder;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -24,12 +23,11 @@ public class RestaurantResource {
      */
     @GetMapping(value = "/{nroRestaurante}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> getRestaurantDetails(
-            @PathVariable String nroRestaurante,
+            @PathVariable Integer nroRestaurante,
             @RequestParam(required = false) Integer nroIdioma
     ) {
         try {
-            Integer restauranteId = B64uDecoder.decodeToInt(nroRestaurante);
-            JsonNode node = restaurantRepository.getRestaurantDetails(restauranteId, nroIdioma);
+            JsonNode node = restaurantRepository.getRestaurantDetails(nroRestaurante, nroIdioma);
             if (node == null) {
                 return ResponseEntity.notFound().build();
             }
@@ -41,3 +39,4 @@ public class RestaurantResource {
         }
     }
 }
+
